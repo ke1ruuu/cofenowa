@@ -1,86 +1,85 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Coffee, ArrowLeft, Search, X, Check, Plus, Minus, ShoppingBag } from "lucide-react"
+import { ArrowLeft, Search, Check, Loader2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
-import Image from "next/image"
 import Link from "next/link"
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import Header from "@/components/home/Header"
 import Footer from "@/components/home/Footer"
 import { useCart } from "@/context/CartContext"
-
-const CATEGORIES = ["All", "Hot Coffee", "Iced Coffee", "Pastries"]
-
-const MENU_DATA = [
-    {
-        category: "Hot Coffee",
-        items: [
-            { id: "i1", name: "Iced Spanish Latte", price: 5.50, description: "Chilled signature latte with a smooth, sweet finish.", image: "/images/coffee4.jpg" },
-            { id: "i2", name: "Cold Brew Tonic", price: 6.00, description: "12-hour steep cold brew topped with premium tonic and citrus.", image: "/images/coffee5.jpg" },
-        ]
-    },
-    {
-        category: "Iced Coffee",
-        items: [
-            { id: "h1", name: "Double Espresso", price: 3.50, description: "Rich, bold, and concentrated espresso shot.", image: "/images/coffee1.jpg" },
-            { id: "h2", name: "Flat White", price: 4.50, description: "Velvety steamed milk poured over a double shot of espresso.", image: "/images/coffee2.jpg" },
-            { id: "h3", name: "Spanish Latte", price: 5.00, description: "Our signature espresso with condensed milk for a creamy sweetness.", image: "/images/coffee3.jpg" },
-        ]
-    },
-    {
-        category: "Pastries",
-        items: [
-            { id: "p1", name: "Butter Croissant", price: 3.75, description: "Flaky, golden-brown layers of pure French butter goodness.", image: "/images/pastries1.jpg" },
-            { id: "p2", name: "Pain au Chocolat", price: 4.25, description: "Buttery pastry filled with rich dark chocolate batons.", image: "/images/pastries2.jpg" },
-            { id: "p3", name: "Almond Danishes", price: 4.50, description: "Sweet almond cream filled pastry topped with toasted flakes.", image: "/images/pastries3.jpg" },
-            { id: "p4", name: "Blueberry Muffin", price: 3.50, description: "Moist muffin packed with fresh blueberries and a crumble top.", image: "/images/pastries4.jpg" },
-            { id: "p5", name: "Cinnamon Roll", price: 4.00, description: "Soft dough swirled with cinnamon sugar and vanilla glaze.", image: "/images/pastries5.jpg" },
-        ]
-    }
-]
+import { CATEGORIES } from "@/components/menu/MenuData"
+import { MenuCard } from "@/components/menu/MenuCard"
+import { CustomizationModal } from "@/components/menu/CustomizationModal"
+import { createClient } from "@/utils/supabase/client"
+import { useStoreSettings } from "@/hooks/useStoreSettings"
 
 export default function MenuPage() {
     const { addToCart } = useCart()
+    const { operationalStatus } = useStoreSettings()
+    const supabase = createClient()
     const [activeCategory, setActiveCategory] = useState("All")
     const [searchQuery, setSearchQuery] = useState("")
     const [selectedProduct, setSelectedProduct] = useState<any>(null)
     const [showSuccess, setShowSuccess] = useState(false)
+    const [products, setProducts] = useState<any[]>([])
+    const [isLoading, setIsLoading] = useState(true)
 
-    // Customization state
-    const [customization, setCustomization] = useState({
-        size: "Medium",
-        milk: "Whole Milk",
-        sweetness: "Regular",
-        quantity: 1
-    })
+    useEffect(() => {
+        const fetchProducts = async () => {
+            setIsLoading(true)
+            const { data, error } = await supabase
+                .from("products")
+                .select(`
+                    *,
+                    categories(id, name),
+                    product_variants(
+                        *,
+                        variant_addons(
+                            product_addons(*)
+                        )
+                    )
+                `)
+                .eq("is_available", true)
+            
+            if (!error && data) {
+                setProducts(data)
+            }
+            setIsLoading(false)
+        }
+        fetchProducts()
+    }, [])
 
     const filteredMenu = useMemo(() => {
-        return MENU_DATA.map(section => ({
-            ...section,
-            items: section.items.filter(item =>
-                (activeCategory === "All" || section.category === activeCategory) &&
+        const sections: { category: string, items: any[] }[] = []
+        
+        // Get unique categories from products or provided categories
+        const availableCategories = Array.from(new Set(products.map(p => p.categories?.name))).filter(Boolean) as string[]
+        
+        const categoriesToProcess = activeCategory === "All" ? availableCategories : [activeCategory]
+        
+        categoriesToProcess.forEach(cat => {
+            const items = products.filter(item => 
+                item.categories?.name === cat && 
                 (item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                    item.description.toLowerCase().includes(searchQuery.toLowerCase()))
+                 item.description.toLowerCase().includes(searchQuery.toLowerCase()))
             )
-        })).filter(section => section.items.length > 0)
-    }, [activeCategory, searchQuery])
-
-    const handleOpenCustomization = (product: any) => {
-        setSelectedProduct(product)
-        setCustomization({
-            size: "Medium",
-            milk: "Whole Milk",
-            sweetness: "Regular",
-            quantity: 1
+            if (items.length > 0) {
+                sections.push({ category: cat, items })
+            }
         })
-    }
+        
+        return sections
+    }, [activeCategory, searchQuery, products])
 
-    const handleAddToCart = () => {
+    const handleAddToCart = (customization: any) => {
         const orderItem = {
             ...selectedProduct,
             ...customization,
-            totalPrice: (selectedProduct.price * customization.quantity).toFixed(2)
+            price: parseFloat(customization.unitPrice), // Use the dynamic unit price
+            totalPrice: customization.totalPrice, // Use the pre-calculated total
+            size: customization.variantDisplay, // Use the pretty formatted name for the cart
+            addonDisplay: customization.addonDisplay
         }
         addToCart(orderItem)
         setSelectedProduct(null)
@@ -91,8 +90,26 @@ export default function MenuPage() {
     return (
         <div className="min-h-screen bg-[#f8f7f5] text-[#181411]">
             <Header />
-
-            <main className="container mx-auto max-w-7xl px-4 py-12 md:px-10">
+            
+            <main className="container mx-auto max-w-7xl px-4 py-12 md:px-10 relative">
+                {operationalStatus && !operationalStatus.is_open && (
+                    <div className="absolute inset-0 z-[100] flex min-h-[400px] flex-col items-center justify-center rounded-[2.5rem] bg-[#f8f7f5]/60 backdrop-blur-xl border-2 border-white/40 shadow-2xl p-8 text-center animate-in fade-in duration-500">
+                        <div className="h-24 w-24 rounded-full bg-[#181411]/5 flex items-center justify-center mb-8">
+                            <Loader2 className="h-10 w-10 text-[#181411]" />
+                        </div>
+                        <h2 className="text-4xl font-black mb-4">Store Temporarily Offline</h2>
+                        <p className="text-[#8a7560] max-w-md font-medium text-lg leading-relaxed">
+                            We're currently closed or undergoing maintenance. Our brew masters will be back soon! Please check our opening hours.
+                        </p>
+                        <Button 
+                            variant="outline" 
+                            className="mt-10 h-14 px-10 rounded-2xl border-[#181411] font-black uppercase tracking-widest hover:bg-[#181411] hover:text-white transition-all"
+                            onClick={() => window.location.href = "/"}
+                        >
+                            Return Home
+                        </Button>
+                    </div>
+                )}
                 {/* Success Toast */}
                 {showSuccess && (
                     <div className="fixed bottom-10 left-1/2 z-[100] flex -translate-x-1/2 items-center gap-3 rounded-full bg-[#181411] px-6 py-4 text-white shadow-2xl animate-in fade-in slide-in-from-bottom-5">
@@ -148,146 +165,59 @@ export default function MenuPage() {
                 </div>
 
                 {/* Menu Grid */}
-                <div className="space-y-16">
-                    {filteredMenu.map((section) => (
-                        <div key={section.category}>
-                            <h2 className="mb-8 text-2xl font-black uppercase tracking-wider text-[#f27f0d]">
-                                {section.category}
-                            </h2>
-                            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                                {section.items.map((item) => (
-                                    <div key={item.id} className="group flex flex-col overflow-hidden rounded-2xl border border-[#e6e0db] bg-white transition-all hover:shadow-xl">
-                                        <div className="relative h-48 w-full overflow-hidden">
-                                            <Image
-                                                src={item.image}
-                                                alt={item.name}
-                                                fill
-                                                className="object-cover transition-transform duration-500 group-hover:scale-110"
-                                            />
-                                        </div>
-                                        <div className="flex flex-1 flex-col p-6">
-                                            <div className="mb-4 flex items-start justify-between">
-                                                <h3 className="text-xl font-bold">{item.name}</h3>
-                                                <span className="rounded-full bg-[#f27f0d]/10 px-3 py-1 text-sm font-black text-[#f27f0d]">
-                                                    ${item.price.toFixed(2)}
-                                                </span>
-                                            </div>
-                                            <p className="flex-1 text-sm leading-relaxed text-[#8a7560]">
-                                                {item.description}
-                                            </p>
-                                            <Button
-                                                onClick={() => handleOpenCustomization(item)}
-                                                className="mt-6 w-full bg-[#181411] font-bold hover:bg-[#f27f0d]"
-                                            >
-                                                Customize & Add
-                                            </Button>
-                                        </div>
-                                    </div>
-                                ))}
+                {isLoading ? (
+                    <div className="flex flex-col items-center justify-center py-20 gap-4">
+                        <Loader2 className="h-10 w-10 text-[#f27f0d] animate-spin" />
+                        <p className="font-bold text-[#8a7560]">Brewing the categories...</p>
+                    </div>
+                ) : filteredMenu.length > 0 ? (
+                    <div className="space-y-16">
+                        {filteredMenu.map((section) => (
+                            <div key={section.category}>
+                                <h2 className="mb-8 text-2xl font-black uppercase tracking-wider text-[#f27f0d]">
+                                    {section.category}
+                                </h2>
+                                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                                    {section.items.map((item) => (
+                                        <MenuCard 
+                                            key={item.id} 
+                                            item={{
+                                                ...item,
+                                                price: item.base_price, // map base_price to price for compatibility
+                                                image: item.image_url // map image_url to image for compatibility
+                                            }} 
+                                            onCustomize={setSelectedProduct} 
+                                        />
+                                    ))}
+                                </div>
                             </div>
-                        </div>
-                    ))}
-                </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="text-center py-20">
+                        <p className="text-xl font-bold text-[#8a7560]">No items found in this category.</p>
+                        <Button 
+                            variant="link" 
+                            onClick={() => {setActiveCategory("All"); setSearchQuery("");}}
+                            className="text-[#f27f0d] font-black underline decoration-2 underline-offset-4 mt-2"
+                        >
+                            Reset filters
+                        </Button>
+                    </div>
+                )}
             </main>
 
             {/* Customization Modal */}
             {selectedProduct && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-                    <div className="relative w-full max-w-2xl overflow-hidden rounded-[2.5rem] bg-white shadow-2xl animate-in zoom-in-95 duration-300">
-                        <button
-                            onClick={() => setSelectedProduct(null)}
-                            className="absolute right-6 top-6 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-[#f8f7f5] text-[#8a7560] transition-colors hover:bg-[#181411] hover:text-white"
-                        >
-                            <X className="h-5 w-5" />
-                        </button>
-
-                        <div className="flex flex-col md:flex-row">
-                            <div className="relative h-64 w-full md:h-auto md:w-2/5">
-                                <Image
-                                    src={selectedProduct.image}
-                                    alt={selectedProduct.name}
-                                    fill
-                                    className="object-cover"
-                                />
-                            </div>
-
-                            <div className="flex-1 p-8 md:p-10">
-                                <div className="mb-6">
-                                    <h2 className="text-3xl font-black">{selectedProduct.name}</h2>
-                                    <p className="mt-2 text-[#8a7560]">{selectedProduct.description}</p>
-                                </div>
-
-                                <div className="space-y-8">
-                                    {/* Size Selection */}
-                                    <div>
-                                        <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-[#f27f0d]">Select Size</h3>
-                                        <div className="flex gap-3">
-                                            {["Small", "Medium", "Large"].map(size => (
-                                                <button
-                                                    key={size}
-                                                    onClick={() => setCustomization({ ...customization, size })}
-                                                    className={`flex-1 rounded-xl border-2 py-3 text-sm font-bold transition-all ${customization.size === size
-                                                        ? "border-[#f27f0d] bg-[#f27f0d]/5 text-[#f27f0d]"
-                                                        : "border-[#f2ede8] bg-white text-[#8a7560] hover:border-[#e6e0db]"
-                                                        }`}
-                                                >
-                                                    {size}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* Milk Selection - only for non-pastries */}
-                                    {!selectedProduct.id.startsWith('p') && (
-                                        <div>
-                                            <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-[#f27f0d]">Milk Preference</h3>
-                                            <div className="flex flex-wrap gap-2">
-                                                {["Whole Milk", "Oat Milk", "Almond Milk", "No Milk"].map(milk => (
-                                                    <button
-                                                        key={milk}
-                                                        onClick={() => setCustomization({ ...customization, milk })}
-                                                        className={`rounded-full border-2 px-5 py-2 text-xs font-bold transition-all ${customization.milk === milk
-                                                            ? "border-[#181411] bg-[#181411] text-white"
-                                                            : "border-[#f2ede8] bg-white text-[#8a7560] hover:border-[#e6e0db]"
-                                                            }`}
-                                                    >
-                                                        {milk}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Quantity and Action */}
-                                    <div className="flex items-center justify-between border-t border-[#f2ede8] pt-8">
-                                        <div className="flex items-center gap-4 rounded-2xl bg-[#f8f7f5] p-2">
-                                            <button
-                                                onClick={() => setCustomization({ ...customization, quantity: Math.max(1, customization.quantity - 1) })}
-                                                className="flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm transition-transform hover:scale-110 active:scale-95"
-                                            >
-                                                <Minus className="h-4 w-4" />
-                                            </button>
-                                            <span className="w-8 text-center font-black">{customization.quantity}</span>
-                                            <button
-                                                onClick={() => setCustomization({ ...customization, quantity: customization.quantity + 1 })}
-                                                className="flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-sm transition-transform hover:scale-110 active:scale-95"
-                                            >
-                                                <Plus className="h-4 w-4" />
-                                            </button>
-                                        </div>
-
-                                        <Button
-                                            onClick={handleAddToCart}
-                                            className="h-14 flex-1 rounded-2xl bg-[#f27f0d] px-8 text-lg font-bold hover:bg-[#f27f0d]/90 md:ml-6"
-                                        >
-                                            Add to Order • ${(selectedProduct.price * customization.quantity).toFixed(2)}
-                                        </Button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <CustomizationModal 
+                    product={{
+                        ...selectedProduct,
+                        price: selectedProduct.base_price, // map base_price to price for compatibility
+                        image: selectedProduct.image_url // map image_url to image for compatibility
+                    }} 
+                    onClose={() => setSelectedProduct(null)} 
+                    onAddToCart={handleAddToCart}
+                />
             )}
 
             <Footer />

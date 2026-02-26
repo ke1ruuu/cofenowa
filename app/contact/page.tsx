@@ -5,9 +5,33 @@ import Footer from "@/components/home/Footer"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { ArrowLeft, Mail, Phone, MapPin, Send, Instagram, Twitter, Facebook } from "lucide-react"
+import { ArrowLeft, Mail, Phone, MapPin, Send, Instagram, Twitter, Facebook, CheckCircle, Loader2 } from "lucide-react"
+import { submitFeedback } from "./actions"
+import { useState } from "react"
 
 export default function ContactPage() {
+    const [isLoading, setIsLoading] = useState(false)
+    const [success, setSuccess] = useState<string | null>(null)
+    const [error, setError] = useState<string | null>(null)
+
+    async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+        event.preventDefault()
+        setIsLoading(true)
+        setError(null)
+        setSuccess(null)
+
+        const formData = new FormData(event.currentTarget)
+        const result = await submitFeedback(formData)
+
+        setIsLoading(false)
+        if (result.error) {
+            setError(result.error)
+        } else {
+            setSuccess(result.message || "Message sent successfully!")
+            event.currentTarget.reset()
+        }
+    }
+
     return (
         <div className="min-h-screen bg-[#f8f7f5] text-[#181411]">
             <Header />
@@ -32,32 +56,61 @@ export default function ContactPage() {
                             {/* Contact Form */}
                             <div className="rounded-[2.5rem] bg-white p-8 shadow-xl md:p-12">
                                 <h2 className="mb-8 text-3xl font-black">Send us a Message</h2>
-                                <form className="space-y-6">
-                                    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                                        <div className="space-y-2">
-                                            <label className="text-sm font-bold uppercase tracking-wider text-[#8a7560]">Full Name</label>
-                                            <Input placeholder="John Doe" className="border-[#e6e0db] bg-[#f8f7f5] focus-visible:ring-[#f27f0d]" />
+                                
+                                {success ? (
+                                    <div className="flex flex-col items-center justify-center py-12 text-center animate-in fade-in zoom-in">
+                                        <div className="h-20 w-20 rounded-full bg-green-50 flex items-center justify-center mb-6">
+                                            <CheckCircle className="h-10 w-10 text-green-500" />
+                                        </div>
+                                        <h3 className="text-2xl font-black mb-2">Message Sent!</h3>
+                                        <p className="text-[#8a7560] max-w-xs">{success}</p>
+                                        <Button 
+                                            onClick={() => setSuccess(null)}
+                                            variant="outline" 
+                                            className="mt-8 rounded-xl font-bold border-[#e6e0db]"
+                                        >
+                                            Send Another Message
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <form onSubmit={handleSubmit} className="space-y-6">
+                                        {error && (
+                                            <div className="p-4 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm font-bold">
+                                                {error}
+                                            </div>
+                                        )}
+                                        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                                            <div className="space-y-2">
+                                                <label className="text-sm font-bold uppercase tracking-wider text-[#8a7560]">Full Name</label>
+                                                <Input name="full_name" required placeholder="John Doe" className="border-[#e6e0db] bg-[#f8f7f5] h-12 rounded-xl focus-visible:ring-[#f27f0d]" />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-sm font-bold uppercase tracking-wider text-[#8a7560]">Email Address</label>
+                                                <Input name="email" type="email" required placeholder="john@example.com" className="border-[#e6e0db] bg-[#f8f7f5] h-12 rounded-xl focus-visible:ring-[#f27f0d]" />
+                                            </div>
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-sm font-bold uppercase tracking-wider text-[#8a7560]">Email Address</label>
-                                            <Input type="email" placeholder="john@example.com" className="border-[#e6e0db] bg-[#f8f7f5] focus-visible:ring-[#f27f0d]" />
+                                            <label className="text-sm font-bold uppercase tracking-wider text-[#8a7560]">Subject</label>
+                                            <Input name="subject" placeholder="Inquiry about..." className="border-[#e6e0db] bg-[#f8f7f5] h-12 rounded-xl focus-visible:ring-[#f27f0d]" />
                                         </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-bold uppercase tracking-wider text-[#8a7560]">Subject</label>
-                                        <Input placeholder="Inquiry about..." className="border-[#e6e0db] bg-[#f8f7f5] focus-visible:ring-[#f27f0d]" />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-bold uppercase tracking-wider text-[#8a7560]">Message</label>
-                                        <textarea
-                                            className="min-h-[150px] w-full rounded-xl border border-[#e6e0db] bg-[#f8f7f5] p-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#f27f0d]"
-                                            placeholder="How can we help you?"
-                                        ></textarea>
-                                    </div>
-                                    <Button className="h-14 w-full bg-[#f27f0d] text-lg font-bold hover:bg-[#f27f0d]/90">
-                                        Send Message <Send className="ml-2 h-5 w-5" />
-                                    </Button>
-                                </form>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-bold uppercase tracking-wider text-[#8a7560]">Message</label>
+                                            <textarea
+                                                name="message"
+                                                required
+                                                className="min-h-[150px] w-full rounded-2xl border border-[#e6e0db] bg-[#f8f7f5] p-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#f27f0d] transition-all"
+                                                placeholder="How can we help you?"
+                                            ></textarea>
+                                        </div>
+                                        <Button disabled={isLoading} className="h-14 w-full bg-[#f27f0d] text-lg font-bold hover:bg-[#f27f0d]/90 rounded-2xl shadow-lg shadow-[#f27f0d]/20 transition-all active:scale-[0.98]">
+                                            {isLoading ? (
+                                                <Loader2 className="h-6 w-6 animate-spin" />
+                                            ) : (
+                                                <>Send Message <Send className="ml-2 h-5 w-5" /></>
+                                            )}
+                                        </Button>
+                                    </form>
+                                )}
                             </div>
 
                             {/* Contact Info & Map */}

@@ -10,6 +10,7 @@ export type CartItem = {
     size: string
     milk?: string
     sweetness?: string
+    addonDisplay?: string
     quantity: number
     totalPrice: string
 }
