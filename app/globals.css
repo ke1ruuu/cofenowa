@@ -4,6 +4,7 @@
 
 html {
   scroll-behavior: smooth;
+  overscroll-behavior-y: none;
 }
 
 @custom-variant dark (&:is(.dark *));
@@ -127,8 +128,8 @@ html {
   }
 
   body {
-    @apply bg-background text-foreground;
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground overscroll-none;
+    @apply bg-background text-foreground overscroll-none;
   }
 }
 

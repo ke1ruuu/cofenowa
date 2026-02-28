@@ -18,8 +18,16 @@ export const metadata: Metadata = {
   description: "The art of crafting the perfect cup of coffee.",
   icons: {
     icon: [
-      { url: "/images/cofenowa/favicon-32x32.png", sizes: "32x32", type: "image/png" },
-      { url: "/images/cofenowa/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      {
+        url: "/images/cofenowa/favicon-32x32.png",
+        sizes: "32x32",
+        type: "image/png",
+      },
+      {
+        url: "/images/cofenowa/favicon-16x16.png",
+        sizes: "16x16",
+        type: "image/png",
+      },
     ],
     apple: "/images/cofenowa/apple-touch-icon.png",
   },
@@ -36,9 +44,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <CartProvider>
-          {children}
-        </CartProvider>
+        <CartProvider>{children}</CartProvider>
       </body>
     </html>
   );
